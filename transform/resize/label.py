@@ -54,7 +54,6 @@ class Resize(object):
         data['image'], data['yx_min'], data['yx_max'] = self.fn(data['image'], data['yx_min'], data['yx_max'], height, width)
         return data
 
-
 def random_crop(config, image, yx_min, yx_max, height, width):
     name = inspect.stack()[0][3]
     scale = config.getfloat('augmentation', name)

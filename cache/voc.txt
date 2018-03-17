@@ -1,2 +1,2 @@
-~/data/VOCdevkit/VOC2007
-~/data/VOCdevkit/VOC2012
+/home/lindell/workspace/dahlia/yolo2-pytorch/data/VOCdevkit/VOC2007
+/home/lindell/workspace/dahlia/yolo2-pytorch/data/VOCdevkit/VOC2012

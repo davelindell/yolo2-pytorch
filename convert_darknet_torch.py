@@ -90,7 +90,13 @@ def main():
     try:
         layers = []
         with open(os.path.expanduser(os.path.expandvars(args.file)), 'rb') as f:
-            major, minor, revision, seen = struct.unpack('4i', f.read(16))
+            major, minor, revision = struct.unpack('3i', f.read(12))
+            if minor == 1:
+                seen = struct.unpack('Q', f.read(4))[0]
+            elif minor == 2:
+                seen = struct.unpack('Q', f.read(8))[0]
+            else:
+                logging.error('This minor version not implemented for parser...')
             logging.info('major=%d, minor=%d, revision=%d, seen=%d' % (major, minor, revision, seen))
             total = 0
             filesize = os.fstat(f.fileno()).st_size

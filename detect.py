@@ -38,6 +38,7 @@ import model
 import utils.postprocess
 import utils.train
 import utils.visualize
+import skimage.io
 
 
 def get_logits(pred):
@@ -101,7 +102,6 @@ class Detect(object):
         logging.info(humanize.naturalsize(sum(var.cpu().numpy().nbytes for var in self.inference.state_dict().values())))
         self.create_cap()
         self.create_cap_size()
-        self.writer = self.create_writer()
         self.keys = set(args.keys)
         self.resize = transform.parse_transform(config, config.get('transform', 'resize_test'))
         self.transform_image = transform.get_transform(config, config.get('transform', 'image_test').split())
@@ -113,7 +113,6 @@ class Detect(object):
             self.writer.release()
         except AttributeError:
             pass
-        self.cap.release()
 
     def create_cap(self):
         try:
@@ -121,10 +120,10 @@ class Detect(object):
         except ValueError:
             cap = os.path.expanduser(os.path.expandvars(self.args.input))
             assert os.path.exists(cap)
-        self.cap = cv2.VideoCapture(cap)
+        self.cap = skimage.io.imread(cap)
 
     def create_cap_size(self):
-        cap_height, cap_width = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)), int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        cap_height, cap_width = (int(self.cap.shape[0]), int(self.cap.shape[1]))
         if self.args.crop:
             crop_ymin, crop_ymax, crop_xmin, crop_xmax = self.args.crop
             if crop_ymin <= 1 and crop_ymax <= 1 and crop_xmin <= 1 and crop_xmax <= 1:
@@ -148,7 +147,7 @@ class Detect(object):
             return cv2.VideoWriter(path, fourcc, fps, (self.cap_width, self.cap_height))
 
     def get_image(self):
-        ret, image_bgr = self.cap.read()
+        image_bgr = self.cap
         if self.args.crop:
             image_bgr = image_bgr[self.crop_ymin:self.crop_ymax, self.crop_xmin:self.crop_xmax]
         return image_bgr
@@ -176,9 +175,6 @@ class Detect(object):
                 self.scale = scale
             yx_min, yx_max = ((t * scale).cpu().numpy().astype(np.int) for t in (yx_min, yx_max))
             image_result = self.draw_bbox(image_result, yx_min, yx_max, cls)
-        if self.args.output:
-            self.writer.write(image_result)
-        else:
             cv2.imshow('detection', image_result)
         if cv2.waitKey(0 if self.args.pause else 1) in self.keys:
             root = os.path.join(self.model_dir, 'snapshot')
@@ -198,8 +194,7 @@ def main():
         logging.config.dictConfig(yaml.load(f))
     detect = Detect(args, config)
     try:
-        while detect.cap.isOpened():
-            detect()
+        detect()
     except KeyboardInterrupt:
         logging.warning('interrupted')
     finally:

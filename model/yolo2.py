@@ -171,3 +171,68 @@ class Tiny(nn.Module):
 
     def scope(self, name):
         return '.'.join(name.split('.')[:-2])
+
+class Yolo(nn.Module):
+    def __init__(self, config_channels, anchors, num_cls, stride=2):
+        nn.Module.__init__(self)
+        self.stride = stride
+        channels = 32
+        layers = []
+
+        # layers1
+        for _ in range(2):
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers1.%d.conv.weight' % len(layers)), 3, same_padding=True))
+            layers.append(nn.MaxPool2d(kernel_size=2))
+            channels *= 2
+        # down 4
+        for _ in range(2):
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers1.%d.conv.weight' % len(layers)), 3, same_padding=True))
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels // 2, 'layers1.%d.conv.weight' % len(layers)), 1))
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers1.%d.conv.weight' % len(layers)), 3, same_padding=True))
+            layers.append(nn.MaxPool2d(kernel_size=2))
+            channels *= 2
+        # down 16
+        for _ in range(2):
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers1.%d.conv.weight' % len(layers)), 3, same_padding=True))
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels // 2, 'layers1.%d.conv.weight' % len(layers)), 1))
+        layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers1.%d.conv.weight' % len(layers)), 3, same_padding=True))
+        self.layers1 = nn.Sequential(*layers)
+
+        # layers2
+        layers = []
+        layers.append(nn.MaxPool2d(kernel_size=2))
+        channels *= 2
+        # down 32
+        for _ in range(2):
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers2.%d.conv.weight' % len(layers)), 3, same_padding=True))
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels // 2, 'layers2.%d.conv.weight' % len(layers)), 1))
+        for _ in range(3):
+            layers.append(Conv2d_BatchNorm(config_channels.channels, config_channels(channels, 'layers2.%d.conv.weight' % len(layers)), 3, same_padding=True))
+        self.layers2 = nn.Sequential(*layers)
+
+        self.passthrough = Conv2d_BatchNorm(self.layers1[-1].conv.weight.size(0), config_channels(64, 'passthrough.conv.weight'), 1)
+
+        # layers3
+        layers = []
+        layers.append(Conv2d_BatchNorm(self.passthrough.conv.weight.size(0) * self.stride * self.stride + self.layers2[-1].conv.weight.size(0), config_channels(1024, 'layers3.%d.conv.weight' % len(layers)), 3, same_padding=True))
+        layers.append(Conv2d(config_channels.channels, model.output_channels(len(anchors), num_cls), 1, act=False))
+        self.layers3 = nn.Sequential(*layers)
+
+        # init
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                m.weight = nn.init.kaiming_normal(m.weight)
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+    def forward(self, x):
+        x = self.layers1(x)
+        _x = reorg(self.passthrough(x), self.stride)
+        x = self.layers2(x)
+        x = torch.cat([_x, x], 1)
+        return self.layers3(x)
+
+    def scope(self, name):
+        return '.'.join(name.split('.')[:-2])
+
